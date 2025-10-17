@@ -192,17 +192,31 @@ for i, slide in enumerate(INPUTS):
             res = res.flipver()
             img = None
             if args.gen_overlay:
+                # Load original slide
                 img_r = pyvips.Image.new_from_file(slide, page=0)
                 img_g = pyvips.Image.new_from_file(slide, page=1)
                 img_b = pyvips.Image.new_from_file(slide, page=2)
 
+                # Create RGB image
                 img = img_r.bandjoin([img_g, img_b])
                 img = img.copy(interpretation="rgb")
 
-                res *= 0.3
-                img *= 0.7
+                # Resize img to match res dimensions
+                img = img.resize(res.width / img.width, vscale=res.height / img.height, kernel="nearest")
 
-                res += img
+                # Ensure both images have same number of bands
+                if res.bands != img.bands:
+                    # If res has alpha channel, remove it
+                    if res.bands == 4:
+                        res = res.extract_band(0, n=3)
+                    # If img has alpha channel, remove it
+                    if img.bands == 4:
+                        img = img.extract_band(0, n=3)
+
+                # Apply overlay blending
+                res = res * 0.3
+                img = img * 0.7
+                res = res + img
 
             props = {
                 "compression": "jpeg",
