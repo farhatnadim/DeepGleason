@@ -1,6 +1,6 @@
 #==============================================================================#
 #  Author:       Dominik Müller                                                #
-#  Copyright:    2024 AG-RAIMIA-Müller, University of Augsburg,                #
+#  Copyright:    2024 IT-Infrastructure for Translational Medical Research,    #
 #                University of Augsburg                                        #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
@@ -17,49 +17,58 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.       #
 #==============================================================================#
 #-----------------------------------------------------#
-#              Information & System Base              #
+#                    Documentation                    #
 #-----------------------------------------------------#
-# Base image
-FROM tensorflow/tensorflow:latest-gpu
+""" Entry script (runner/main function) which will be called in AUCMEDI AutoML.
 
-# Meta information
-LABEL authors="Dominik Müller"
-LABEL contact="dominik.mueller@informatik.uni-augsburg.de"
-LABEL repository="https://github.com/frankkramer-lab/DeepGleason"
-LABEL license="GNU General Public License v3.0"
+The console entry `aucmedi` refers to `aucmedi.automl.main:main`.
 
+Executes AUCMEDI AutoML pipeline for training, prediction and evaluation.
+
+More information can be found in the docs: [Documentation - AutoML](../../../automl/overview/)
+"""
 #-----------------------------------------------------#
-#                        Setup                        #
+#                   Library imports                   #
 #-----------------------------------------------------#
-# Setup system environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PIP_ROOT_USER_ACTION=ignore
-
-# Copy git repository into container
-ADD . /root/DeepGleason
-
-# Install required software dependencies (opencv, libvips)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3-dev \
-        python3-opencv \
-        libvips-dev \
-        libgomp1 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Install & Update Python pip
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3 get-pip.py
-RUN python3 -m pip install pip --upgrade
-
-# Install DeepGleason from local git repo
-RUN python3 -m pip install -r /root/DeepGleason/requirements.txt
-
-# Create working directory
-VOLUME ["/data"]
-WORKDIR "/root/DeepGleason/"
+# External libraries
+import sys
+# Internal libraries
+from aucmedi.automl import *
+from aucmedi.automl.cli import *
 
 #-----------------------------------------------------#
-#                       Startup                       #
+#                Main Method - Runner                 #
 #-----------------------------------------------------#
-ENTRYPOINT ["python3", "code/main.py", "--input", "/data/", "--output", "/data/", "--model", "models/model.ConvNeXtBase.hdf5", "--predictions", "/data/predictions.csv"]
+def main():
+    # Initialize argparser core
+    parser, subparsers = cli_core()
+    # # Define Subparser YAML
+    # cli_yaml(subparsers)
+    # Define Subparser Training
+    cli_training(subparsers)
+    # Define Subparser Prediction
+    cli_prediction(subparsers)
+    # Define Subparser Evaluation
+    cli_evaluation(subparsers)
+
+    # Help page hook for passing no parameters
+    if len(sys.argv)<=1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    # Parse arguments
+    else : args = parser.parse_args()
+
+    # Call corresponding cli or yaml parser
+    if args.hub == "yaml" : config = parse_yaml(args)
+    else : config = parse_cli(args)
+
+    # Run training pipeline
+    if config["hub"] == "training" : block_train(config)
+    # Run prediction pipeline
+    if config["hub"] == "prediction" : block_predict(config)
+    # Run evaluation pipeline
+    if config["hub"] == "evaluation" : block_evaluate(config)
+
+# Runner for direct script call
+if __name__ == "__main__":
+    main()

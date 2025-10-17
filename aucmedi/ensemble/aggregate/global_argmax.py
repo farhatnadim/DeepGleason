@@ -1,6 +1,6 @@
 #==============================================================================#
 #  Author:       Dominik Müller                                                #
-#  Copyright:    2024 AG-RAIMIA-Müller, University of Augsburg,                #
+#  Copyright:    2024 IT-Infrastructure for Translational Medical Research,    #
 #                University of Augsburg                                        #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
@@ -17,49 +17,42 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.       #
 #==============================================================================#
 #-----------------------------------------------------#
-#              Information & System Base              #
+#                   Library imports                   #
 #-----------------------------------------------------#
-# Base image
-FROM tensorflow/tensorflow:latest-gpu
-
-# Meta information
-LABEL authors="Dominik Müller"
-LABEL contact="dominik.mueller@informatik.uni-augsburg.de"
-LABEL repository="https://github.com/frankkramer-lab/DeepGleason"
-LABEL license="GNU General Public License v3.0"
+# External libraries
+import numpy as np
+# Internal libraries/scripts
+from aucmedi.ensemble.aggregate.agg_base import Aggregate_Base
 
 #-----------------------------------------------------#
-#                        Setup                        #
+#               Aggregate: Global Argmax              #
 #-----------------------------------------------------#
-# Setup system environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PIP_ROOT_USER_ACTION=ignore
+class GlobalArgmax(Aggregate_Base):
+    """ Aggregate function based on Global Argmax.
 
-# Copy git repository into container
-ADD . /root/DeepGleason
+    This class should be passed to an ensemble function/class for combining predictions.
+    """
+    #---------------------------------------------#
+    #                Initialization               #
+    #---------------------------------------------#
+    def __init__(self):
+        # No hyperparameter adjustment required for this method, therefore skip
+        pass
 
-# Install required software dependencies (opencv, libvips)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3-dev \
-        python3-opencv \
-        libvips-dev \
-        libgomp1 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    #---------------------------------------------#
+    #                  Aggregate                  #
+    #---------------------------------------------#
+    def aggregate(self, preds):
+        # Identify global argmax
+        max = np.amax(preds)
+        argmax_flatten = np.argmax(preds)
+        argmax = np.unravel_index(argmax_flatten, preds.shape)[-1]
 
-# Install & Update Python pip
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3 get-pip.py
-RUN python3 -m pip install pip --upgrade
+        # Compute prediction by global argmax and equally distributed remaining
+        # probability for other classes
+        prob_remaining = np.divide(1-max, preds.shape[1]-1)
+        pred = np.full((preds.shape[1],), fill_value=prob_remaining)
+        pred[argmax] = max
 
-# Install DeepGleason from local git repo
-RUN python3 -m pip install -r /root/DeepGleason/requirements.txt
-
-# Create working directory
-VOLUME ["/data"]
-WORKDIR "/root/DeepGleason/"
-
-#-----------------------------------------------------#
-#                       Startup                       #
-#-----------------------------------------------------#
-ENTRYPOINT ["python3", "code/main.py", "--input", "/data/", "--output", "/data/", "--model", "models/model.ConvNeXtBase.hdf5", "--predictions", "/data/predictions.csv"]
+        # Return prediction
+        return pred
