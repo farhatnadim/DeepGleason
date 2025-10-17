@@ -190,6 +190,11 @@ for i, slide in enumerate(INPUTS):
             res = res.resize(PATCH_SIZE[0], kernel="nearest", vscale=PATCH_SIZE[1])
             res = res.rot270()
             res = res.flipver()
+
+            # Ensure res is exactly 3 bands (RGB only)
+            if res.bands > 3:
+                res = res.extract_band(0, n=3)
+
             img = None
             if args.gen_overlay:
                 # Load original slide
@@ -201,17 +206,20 @@ for i, slide in enumerate(INPUTS):
                 img = img_r.bandjoin([img_g, img_b])
                 img = img.copy(interpretation="rgb")
 
+                # Ensure img is exactly 3 bands (RGB only)
+                if img.bands > 3:
+                    img = img.extract_band(0, n=3)
+
                 # Resize img to match res dimensions
                 img = img.resize(res.width / img.width, vscale=res.height / img.height, kernel="nearest")
 
-                # Ensure both images have same number of bands
-                if res.bands != img.bands:
-                    # If res has alpha channel, remove it
-                    if res.bands == 4:
-                        res = res.extract_band(0, n=3)
-                    # If img has alpha channel, remove it
-                    if img.bands == 4:
-                        img = img.extract_band(0, n=3)
+                # Final safety check - ensure both are exactly 3 bands
+                print(f"Debug: res.bands={res.bands}, img.bands={img.bands}, res.size=({res.width},{res.height}), img.size=({img.width},{img.height})")
+
+                if res.bands != 3:
+                    res = res.extract_band(0, n=3)
+                if img.bands != 3:
+                    img = img.extract_band(0, n=3)
 
                 # Apply overlay blending
                 res = res * 0.3
