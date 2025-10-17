@@ -48,8 +48,6 @@ def run_aucmedi(x, architecture, config):
         config["nclasses"],
         channels=3,
         architecture="2D." + arch_name,
-        workers=16, 
-        multiprocessing=True,
     )
 
     # Load model
